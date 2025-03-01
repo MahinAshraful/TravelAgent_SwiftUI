@@ -1,21 +1,26 @@
-//
-//  ContentView.swift
-//  Travel_Agent
-//
-//  Created by Mahin Ashraful on 3/1/25.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @State private var message = "Hello, world!"
+    
     var body: some View {
         VStack {
             Image(systemName: "globe")
                 .imageScale(.large)
                 .foregroundStyle(.tint)
-            Text("Hello, world test!")
+            Text(message)
+            
+            Button("Call API") {
+                fetchData()
+            }
         }
         .padding()
+    }
+    
+    func fetchData() {
+        SayText.fetchData { newMessage in
+            self.message = newMessage
+        }
     }
 }
 
