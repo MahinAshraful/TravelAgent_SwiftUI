@@ -2,73 +2,27 @@ import SwiftUI
 import SafariServices
 
 struct ContentView: View {
-    // Search parameters
-    @State private var leavingAirport = "JFK"
-    @State private var destinationAirport = "IST"
-    @State private var departureDate = Date()
-    @State private var returnDate = Date().addingTimeInterval(86400 * 14)  // 2 weeks from now
-    @State private var numAdults = 1
-    @State private var numSeniors = 0
-    @State private var numStudents = 0
-    @State private var childrenAges: [Int] = []
-    @State private var infantsOnSeat = 0
-    @State private var infantsOnLap = 0
+    // Natural language query field
+    @State private var flightQuery = "I want to fly from New York to Istanbul on June 15, 2025 and return on June 29, 2025 with 2 adults and 1 child who is 5 years old."
     
     // UI state
     @State private var isLoading = false
     @State private var bookingURL: String?
     @State private var errorMessage: String?
     @State private var showSafari = false
-    
-    // Date formatter for API dates
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
+    @State private var extractedParams: [String: Any]?
     
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Flight Route")) {
-                    HStack {
-                        Text("From:")
-                        TextField("Departure Airport", text: $leavingAirport)
-                            .multilineTextAlignment(.trailing)
-                            .autocapitalization(.allCharacters)
-                            .disableAutocorrection(true)
-                    }
+                Section(header: Text("Tell me about your trip")) {
+                    TextEditor(text: $flightQuery)
+                        .frame(height: 120)
+                        .foregroundColor(.primary)
                     
-                    HStack {
-                        Text("To:")
-                        TextField("Destination Airport", text: $destinationAirport)
-                            .multilineTextAlignment(.trailing)
-                            .autocapitalization(.allCharacters)
-                            .disableAutocorrection(true)
-                    }
-                }
-                
-                Section(header: Text("Travel Dates")) {
-                    DatePicker("Departure Date", selection: $departureDate, displayedComponents: .date)
-                    DatePicker("Return Date", selection: $returnDate, displayedComponents: .date)
-                }
-                
-                Section(header: Text("Passengers")) {
-                    Stepper("Adults: \(numAdults)", value: $numAdults, in: 1...9)
-                    Stepper("Seniors: \(numSeniors)", value: $numSeniors, in: 0...9)
-                    Stepper("Students: \(numStudents)", value: $numStudents, in: 0...9)
-                    
-                    NavigationLink(destination: ChildrenSelectionView(childrenAges: $childrenAges)) {
-                        HStack {
-                            Text("Children (2-17 years)")
-                            Spacer()
-                            Text("\(childrenAges.count)")
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    
-                    Stepper("Infants (on seat): \(infantsOnSeat)", value: $infantsOnSeat, in: 0...4)
-                    Stepper("Infants (on lap): \(infantsOnLap)", value: $infantsOnLap, in: 0...4)
+                    Text("Example: \"I want to fly from New York to London next Friday and return the following Monday with 2 adults.\"")
+                        .font(.caption)
+                        .foregroundColor(.gray)
                 }
                 
                 Section {
@@ -83,19 +37,61 @@ struct ContentView: View {
                         } else {
                             HStack {
                                 Spacer()
-                                Text("Search Best Flights")
+                                Image(systemName: "sparkles")
+                                Text("Find My Flights")
                                     .bold()
                                 Spacer()
                             }
                         }
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || flightQuery.isEmpty)
                 }
                 
                 if let errorMessage = errorMessage {
                     Section {
                         Text(errorMessage)
                             .foregroundColor(.red)
+                    }
+                }
+                
+                if let extractedParams = extractedParams {
+                    Section(header: Text("Understood Flight Details")) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("From:")
+                                Spacer()
+                                Text(extractedParams["leaving_airport"] as? String ?? "Unknown")
+                                    .bold()
+                            }
+                            
+                            HStack {
+                                Text("To:")
+                                Spacer()
+                                Text(extractedParams["destination_airport"] as? String ?? "Unknown")
+                                    .bold()
+                            }
+                            
+                            HStack {
+                                Text("Departure:")
+                                Spacer()
+                                Text(extractedParams["departure_date"] as? String ?? "Unknown")
+                                    .bold()
+                            }
+                            
+                            HStack {
+                                Text("Return:")
+                                Spacer()
+                                Text(extractedParams["return_date"] as? String ?? "Unknown")
+                                    .bold()
+                            }
+                            
+                            HStack {
+                                Text("Passengers:")
+                                Spacer()
+                                Text(passengerSummary(from: extractedParams))
+                                    .bold()
+                            }
+                        }
                     }
                 }
                 
@@ -120,7 +116,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationTitle("Flight Search")
+            .navigationTitle("AI Flight Search")
             .sheet(isPresented: $showSafari) {
                 if let bookingURLString = bookingURL, let url = URL(string: bookingURLString) {
                     SafariView(url: url)
@@ -129,30 +125,58 @@ struct ContentView: View {
         }
     }
     
+    private func passengerSummary(from params: [String: Any]) -> String {
+        let adults = params["num_adults"] as? Int ?? 0
+        let seniors = params["num_seniors"] as? Int ?? 0
+        let students = params["num_students"] as? Int ?? 0
+        let childrenAges = params["children_ages"] as? [Int] ?? []
+        let infantsOnSeat = params["infants_on_seat"] as? Int ?? 0
+        let infantsOnLap = params["infants_on_lap"] as? Int ?? 0
+        
+        var parts = [String]()
+        
+        if adults > 0 {
+            parts.append("\(adults) Adult\(adults > 1 ? "s" : "")")
+        }
+        
+        if seniors > 0 {
+            parts.append("\(seniors) Senior\(seniors > 1 ? "s" : "")")
+        }
+        
+        if students > 0 {
+            parts.append("\(students) Student\(students > 1 ? "s" : "")")
+        }
+        
+        if !childrenAges.isEmpty {
+            parts.append("\(childrenAges.count) Child\(childrenAges.count > 1 ? "ren" : "")")
+        }
+        
+        if infantsOnSeat > 0 {
+            parts.append("\(infantsOnSeat) Infant\(infantsOnSeat > 1 ? "s" : "") (seat)")
+        }
+        
+        if infantsOnLap > 0 {
+            parts.append("\(infantsOnLap) Infant\(infantsOnLap > 1 ? "s" : "") (lap)")
+        }
+        
+        return parts.joined(separator: ", ")
+    }
+    
     private func searchFlights() {
         // Reset state
         isLoading = true
         errorMessage = nil
         bookingURL = nil
+        extractedParams = nil
         
-        // Call API
-        FlightAPI.searchFlights(
-            leavingAirport: leavingAirport,
-            destinationAirport: destinationAirport,
-            departureDate: dateFormatter.string(from: departureDate),
-            returnDate: dateFormatter.string(from: returnDate),
-            numAdults: numAdults,
-            numSeniors: numSeniors,
-            numStudents: numStudents,
-            childrenAges: childrenAges,
-            infantsOnSeat: infantsOnSeat,
-            infantsOnLap: infantsOnLap
-        ) { result in
+        // Call AI API
+        FlightAPI.searchFlightsWithAI(query: flightQuery) { result in
             isLoading = false
             
             switch result {
-            case .success(let url):
-                bookingURL = url
+            case .success(let response):
+                bookingURL = response.bookingURL
+                extractedParams = response.extractedParams
             case .failure(let error):
                 errorMessage = "Error: \(error.localizedDescription)"
             }
